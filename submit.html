@@ -2,28 +2,106 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Start Charging Session</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Start Charging — Submit</title>
   <!-- Firebase SDK v9 compat -->
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database-compat.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      margin: 0;
+      background: #f7f9fa;
+      color: #232a3d;
+    }
+    .container {
+      max-width: 430px;
+      margin: 42px auto;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 12px rgba(160,180,200,.07);
+      padding: 28px 32px 18px 32px;
+    }
+    h1 {
+      font-size: 1.56rem;
+      margin-bottom: 18px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+    label {
+      display: block;
+      margin-bottom: 11px;
+      font-weight: 600;
+      color: #222a40;
+      font-size: 1.087rem;
+    }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px 8px;
+      font-size: 1.1rem;
+      border: 2px solid #e8f0fe;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      background: #f7f9fc;
+      outline: none;
+      font-family: inherit;
+      transition: border-color .13s;
+    }
+    input:focus {
+      border-color: #1466d9;
+    }
+    .submit-btn {
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      padding: 9px 26px;
+      font-weight: 600;
+      font-size: 1.12em;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: background .13s;
+      box-shadow: 0 2px 8px rgba(110,140,180,0.06);
+    }
+    .submit-btn:hover {
+      background: #1656a2;
+    }
+    #successMsg {
+      color: #228b22;
+      text-align: left;
+      margin-top: 12px;
+      font-size: 1rem;
+    }
+    .helper-msg {
+      margin-top: 18px;
+      font-size: 1.01rem;
+      color: #707a8a;
+    }
+    .extra-msg {
+      margin-bottom: 8px;
+      color: #454d65;
+      font-size: 1.02em;
+    }
+  </style>
 </head>
 <body>
-  <h1>EV-Charger: Start Charging</h1>
-  <form id="chargingForm">
-    <label>Vehicle Number: <input type="text" id="vehicleNumber" required></label><br>
-    <label>Amount (₹): <input type="number" id="amountPaid" min="1" required></label><br>
-    <label>Charger:
-      <select id="chargerId" required>
-        <option value="charger1">Charger A</option>
-        <option value="charger2">Charger B</option>
-        <option value="charger3">Charger C</option>
-        <option value="charger4">Charger D</option>
-      </select>
-    </label><br>
-    <button type="submit">Start Charging</button>
-  </form>
-  <p id="successMsg"></p>
+  <div class="container">
+    <h1>Start Charging — Submit</h1>
+    <form id="chargingForm">
+      <label>Vehicle number
+        <input type="text" id="vehicleNumber" placeholder="e.g. WB01AB1234" required autocomplete="off">
+      </label>
+      <label>Amount to pay (₹)
+        <input type="number" id="amountPaid" placeholder="e.g. 50" min="1" required autocomplete="off">
+      </label>
+      <button class="submit-btn" type="submit">Submit Payment & Start</button>
+    </form>
+    <div class="extra-msg" id="sessionMsg"></div>
+    <div id="successMsg"></div>
+    <div class="helper-msg">
+      This demo will auto-assign a free charger if one exists (first free charger). If none are free, the session will be recorded with "unassigned".
+    </div>
+  </div>
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyDwL6DkusiZ4dw6n2zCkn5fkUKA8jePDxU",
@@ -38,13 +116,25 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    document.getElementById("chargingForm").onsubmit = function(e) {
+    document.getElementById("chargingForm").onsubmit = async function(e) {
       e.preventDefault();
       const vehicleNumber = document.getElementById("vehicleNumber").value.trim();
-      const amountPaid = document.getElementById("amountPaid").value;
-      const chargerId = document.getElementById("chargerId").value;
-      if (!vehicleNumber || !amountPaid || !chargerId) return;
+      const amountPaid = document.getElementById("amountPaid").value.trim();
+      let chargerId = "unassigned";
+      let chargerName = "unassigned";
 
+      // Find first free charger
+      const chargersSnap = await db.ref('chargers').once('value');
+      const chargers = chargersSnap.val() || {};
+      for(let id in chargers) {
+        if(chargers[id].occupied === false) {
+          chargerId = id;
+          chargerName = chargers[id].label || id;
+          // Set charger as occupied
+          db.ref("chargers/" + id + "/occupied").set(true);
+          break;
+        }
+      }
       // Prepare session data
       const sessionData = {
         vehicleNumber,
@@ -53,17 +143,13 @@
         startTime: Date.now(),
         active: true
       };
-      db.ref("sessions").push(sessionData, function(error) {
-        if (!error) {
-          document.getElementById("successMsg").innerText = "Charging started!";
-          document.getElementById("chargingForm").reset();
-          setTimeout(() => { document.getElementById("successMsg").innerText = ""; }, 2000);
-        } else {
-          document.getElementById("successMsg").innerText = "Error starting session!";
-        }
-      });
-      // Optionally set charger occupied status true
-      db.ref("chargers/" + chargerId + "/occupied").set(true);
+      const ref = db.ref("sessions").push();
+      await ref.set(sessionData);
+      document.getElementById("successMsg").innerText = "Charging started!";
+      document.getElementById("chargingForm").reset();
+      document.getElementById("sessionMsg").innerText =
+        `Started session on ${chargerName}. Session id: ${ref.key}`;
+      setTimeout(() => { document.getElementById("successMsg").innerText = ""; }, 3000);
     };
   </script>
 </body>
