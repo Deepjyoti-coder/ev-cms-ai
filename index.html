@@ -145,7 +145,7 @@
     <div class="stats-row">
       <div class="stat-box">
         <span class="stat-value" id="chargerOnline">0</span>
-        <span class="stat-label">Chargers online</span>
+        <span class="stat-label">Chargers online (occupied)</span>
       </div>
       <div class="stat-box">
         <span class="stat-value" id="totalPower">0.00</span>
@@ -188,9 +188,9 @@
 
     let sessions = {};
     let chargers = {};
+    let chargersOnline = 0; // start at 0!
     let lastSyncTimer = null;
 
-    // Utility functions
     function formatCurrency(r) { return "₹" + Number(r).toFixed(2); }
     function formatElapsed(ms) {
       let sec = Math.floor(ms/1000);
@@ -205,15 +205,16 @@
       return out.join(' ');
     }
 
-    function getChargersOnlineCount() {
-      // Chargers that are not occupied (free)
-      return Object.values(chargers).filter(ch => ch && ch.occupied === false).length;
-    }
+    // Listen to the chargersOnline counter at root
+    db.ref("chargersOnline").on("value", snap => {
+      chargersOnline = snap.val() || 0;
+      document.getElementById("chargerOnline").innerText = chargersOnline;
+    });
 
+    // All other stats
     function getActiveSessionsCount() {
       return Object.values(sessions).filter(s => s && s.active).length;
     }
-
     function getTotalPower() {
       let totalPower = 0;
       let now = Date.now();
@@ -227,7 +228,6 @@
     }
 
     function renderStats() {
-      document.getElementById("chargerOnline").innerText = getChargersOnlineCount();
       document.getElementById("activeCount").innerText = getActiveSessionsCount();
       document.getElementById("totalPower").innerText = getTotalPower().toFixed(2);
     }
@@ -266,16 +266,19 @@
     }
 
     function endSession(sessionId, chargerId) {
-      // End session
+      // End session and update counter
       firebase.database().ref("sessions/" + sessionId + "/active").set(false, function(error) {
         if (!error) {
           document.getElementById("endSuccessMsg").innerText = "Session ended!";
           setTimeout(() => { document.getElementById("endSuccessMsg").innerText = ""; }, 2000);
+
+          // Decrement chargersOnline
+          db.ref("chargersOnline").transaction(current => (current || 0) > 0 ? current - 1 : 0);
+
         } else {
           document.getElementById("endSuccessMsg").innerText = "Error ending session!";
         }
       });
-      // Mark charger as unoccupied
       if(chargerId && chargerId !== "unassigned") {
         firebase.database().ref("chargers/" + chargerId + "/occupied").set(false);
       }
