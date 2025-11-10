@@ -21,6 +21,26 @@
       box-shadow: 0 2px 12px rgba(160,180,200,.07);
       padding: 28px 32px 18px 32px;
     }
+    .nav-bar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .nav-btn {
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      padding: 8px 18px;
+      font-weight: 500;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .nav-btn:hover {
+      background: #1656a2;
+    }
     h1 {
       font-size: 1.56rem;
       margin-bottom: 18px;
@@ -86,6 +106,9 @@
 </head>
 <body>
   <div class="container">
+    <div class="nav-bar">
+      <button class="nav-btn" onclick="window.location.href='index.html'">Go to Dashboard</button>
+    </div>
     <h1>Start Charging — Submit</h1>
     <form id="chargingForm">
       <label>Vehicle number
