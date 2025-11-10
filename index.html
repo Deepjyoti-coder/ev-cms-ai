@@ -21,9 +21,11 @@
       <th>Amount Paid</th>
       <th>Charging Start Time</th>
       <th>Charger</th>
+      <th>Action</th>
     </tr>
     <!-- Data rows inserted here -->
   </table>
+  <p id="endSuccessMsg"></p>
   <script>
     // Firebase config from your details
     const firebaseConfig = {
@@ -49,6 +51,7 @@
         <th>Amount Paid</th>
         <th>Charging Start Time</th>
         <th>Charger</th>
+        <th>Action</th>
       </tr>`;
       let activeCount = 0;
       for (let id in sessions) {
@@ -60,6 +63,20 @@
           row.insertCell(1).innerText = "₹ " + session.amountPaid;
           row.insertCell(2).innerText = new Date(session.startTime).toLocaleTimeString();
           row.insertCell(3).innerText = session.chargerId ? session.chargerId : '';
+
+          // Add End button
+          const actionCell = row.insertCell(4);
+          const endBtn = document.createElement('button');
+          endBtn.innerText = "End Session";
+          endBtn.style.background = "#d9534f"; // Red style
+          endBtn.style.color = "#fff";
+          endBtn.style.border = "none";
+          endBtn.style.borderRadius = "3px";
+          endBtn.style.cursor = "pointer";
+          endBtn.onclick = function() {
+            endSession(id, session.chargerId);
+          };
+          actionCell.appendChild(endBtn);
         }
       }
       document.getElementById("activeCount").innerText = activeCount;
@@ -77,6 +94,23 @@
         }
       }
       document.getElementById("totalPower").innerText = totalPower.toFixed(2);
+    }
+
+    // End charging session function
+    function endSession(sessionId, chargerId) {
+      // set session.active to false
+      firebase.database().ref("sessions/" + sessionId + "/active").set(false, function(error) {
+        if (!error) {
+          document.getElementById("endSuccessMsg").innerText = "Session ended!";
+          setTimeout(() => { document.getElementById("endSuccessMsg").innerText = ""; }, 2000);
+        } else {
+          document.getElementById("endSuccessMsg").innerText = "Error ending session!";
+        }
+      });
+      // set charger to unoccupied
+      if (chargerId) {
+        firebase.database().ref("chargers/" + chargerId + "/occupied").set(false);
+      }
     }
 
     // Listen for live session updates
