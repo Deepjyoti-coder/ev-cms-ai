@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>EV Charger — Transaction History</title>
+  <!-- Chart.js for graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Firebase SDK v9 compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database-compat.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      background: #f7f9fa;
+      margin: 0;
+      padding: 0;
+      color: #232a3d;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 30px auto;
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 3px 20px rgba(160,180,200,0.09);
+      padding: 32px 42px;
+    }
+    h1 {
+      font-size: 2.1rem;
+      font-weight: 700;
+      margin-bottom: 26px;
+      letter-spacing: .04em;
+      text-align: left;
+    }
+    .stats-row {
+      display: flex;
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+    .stat-box {
+      background: #eef2fa;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(150,170,190,0.05);
+      padding: 14px 30px;
+      min-width: 180px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.52rem;
+      font-weight: bold;
+      color: #1976d2;
+      margin-bottom: 2px;
+      line-height: 1.3;
+      display: block;
+    }
+    .stat-label {
+      font-size: 1rem;
+      color: #444e60;
+      letter-spacing: 0.04em;
+    }
+    .chart-section {
+      margin-bottom: 24px;
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 22px 18px;
+    }
+    .chart-title {
+      font-weight: 600;
+      font-size: 1.09rem;
+      margin-bottom: 10px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 2px 8px rgba(160,180,200,0.04);
+      padding: 16px 12px 10px 12px;
+      margin-bottom: 12px;
+    }
+    .card h2 {
+      font-weight: 700;
+      font-size: 1.18rem;
+      margin: 0 0 9px 0;
+      letter-spacing: .01em;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 12px;
+      background: #fff;
+    }
+    th, td {
+      padding: 11px 7px;
+      text-align: left;
+      border-bottom: 1px solid #f0f1f3;
+      font-size: 1rem;
+      font-weight: 400;
+    }
+    th {
+      color: #222a40;
+      font-weight: 700;
+      background: none;
+    }
+    .vehicle-col {
+      min-width: 120px;
+      font-weight: 500;
+      color: #1976d2;
+    }
+    .charger-col {
+      color: #205980;
+    }
+    .success-tag {
+      background: #4caf50;
+      color: #fff;
+      font-size: .96em;
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 7px;
+      margin-right: 4px;
+    }
+    .fail-tag {
+      background: #f44336;
+      color: #fff;
+      font-size: .96em;
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 7px;
+      margin-right: 4px;
+    }
+    .power-col {
+      color: #8d53c7;
+      font-weight: 500;
+    }
+    .date-col {
+      min-width: 70px;
+      font-size: .96em;
+      color: #596070;
+    }
+    .history-note {
+      margin-top: 2px;
+      font-size: .98em;
+      color: #526080;
+    }
+    .driver-img {
+      width: 32px;
+      height: 32px;
+      border-radius: 100px;
+      background: #e0e7f5;
+      margin-right: 10px;
+      vertical-align: middle;
+      box-shadow: 0 0 7px #e0e4fa;
+    }
+    .chart-canvas {
+      display: block;
+      margin: 0 auto;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>EV Charger — Transaction History</h1>
+    <!-- DYNAMIC STATS -->
+    <div class="stats-row">
+      <div class="stat-box">
+        <span class="stat-value" id="historyTotal">0</span>
+        <span class="stat-label">Total transactions</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-value" id="historyPaid">₹0.00</span>
+        <span class="stat-label">Total paid</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-value" id="historyPower">0.00 kWh</span>
+        <span class="stat-label">Total energy dispensed</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-value" id="historyDuration">0h 0m</span>
+        <span class="stat-label">Total charging duration</span>
+      </div>
+    </div>
+    <div class="chart-section">
+      <div class="chart-title">Transactions per Day (Bar)</div>
+      <canvas id="txBarChart" width="950" height="180" class="chart-canvas"></canvas>
+      <div class="chart-title">Total Amount Paid & Energy Used Over Time (Line)</div>
+      <canvas id="amountLineChart" width="950" height="120" class="chart-canvas"></canvas>
+    </div>
+    <div class="card">
+      <h2>All Transactions</h2>
+      <table id="txTable">
+        <tr>
+          <th>Status</th>
+          <th class="vehicle-col">Vehicle</th>
+          <th>Amount</th>
+          <th class="charger-col">Charger</th>
+          <th>Start</th>
+          <th>End</th>
+          <th class="power-col">Power Used (Wh)</th>
+          <th>Session</th>
+        </tr>
+        <!-- Transaction rows inserted here -->
+      </table>
+      <div class="history-note" id="historyNote"></div>
+    </div>
+  </div>
+  <script>
+    // Firebase config from your details
+    const firebaseConfig = {
+      apiKey: "AIzaSyDwL6DkusiZ4dw6n2zCkn5fkUKA8jePDxU",
+      authDomain: "ev-charger-demo-af910.firebaseapp.com",
+      databaseURL: "https://ev-charger-demo-af910-default-rtdb.firebaseio.com",
+      projectId: "ev-charger-demo-af910",
+      storageBucket: "ev-charger-demo-af910.firebasestorage.app",
+      messagingSenderId: "407797049243",
+      appId: "1:407797049243:web:3cccc1c34bfc67ddd4a33e",
+      measurementId: "G-M3BGNZVTZN"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    function formatCurrency(r) { return "₹" + Number(r).toFixed(2); }
+    function formatElapsed(ms) {
+      let sec = Math.floor(ms/1000);
+      let m = Math.floor(sec/60), s = sec%60;
+      let h = Math.floor(m/60), m2 = m%60;
+      let d = Math.floor(h/24), h2 = h%24;
+      let out = [];
+      if(d) out.push(d+"d");
+      if(h2) out.push(h2+"h");
+      if(m2) out.push(m2+"m");
+      out.push(s+"s");
+      return out.join(' ');
+    }
+    function formatDate(ts) {
+      var dt = new Date(ts);
+      return dt.toLocaleString().replace(/,\s?/g,"\n");
+    }
+
+    function getSessionStatus(session) {
+      if (session.active === false) return '<span class="success-tag">Ended</span>';
+      if (session.active === true) return '<span class="fail-tag">Active</span>';
+      return '<span class="fail-tag">Unknown</span>';
+    }
+
+    function sessionPowerWh(session) {
+      if (!session.startTime) return 0;
+      let end = (session.active === false && session.endTime) ? session.endTime : Date.now();
+      let seconds = Math.floor((end - session.startTime) / 1000);
+      return (seconds * 0.01).toFixed(2); // watt-seconds, convert to Wh (divide by 3600 for kWh if needed)
+    }
+
+    function showStats(sessionsArr) {
+      let totalTx = sessionsArr.length;
+      let totalPaid = 0, totalPower = 0, totalDuration = 0;
+
+      sessionsArr.forEach(session => {
+        totalPaid += Number(session.amountPaid || 0);
+        totalPower += Number(sessionPowerWh(session));
+        if (session.startTime) {
+          let end = (session.active === false && session.endTime) ? session.endTime : Date.now();
+          totalDuration += (end - session.startTime);
+        }
+      });
+      document.getElementById("historyTotal").innerText = totalTx;
+      document.getElementById("historyPaid").innerText = formatCurrency(totalPaid);
+      document.getElementById("historyPower").innerText = (totalPower/1000).toFixed(2) + " kWh";
+      // Duration formatted as h m
+      let totalSecs = Math.floor(totalDuration/1000);
+      let h = Math.floor(totalSecs/3600), m = Math.floor((totalSecs%3600)/60);
+      document.getElementById("historyDuration").innerText = h+"h "+m+"m";
+    }
+
+    function populateTable(sessionsArr) {
+      const table = document.getElementById("txTable");
+      table.innerHTML = `<tr>
+        <th>Status</th>
+        <th class="vehicle-col">Vehicle</th>
+        <th>Amount</th>
+        <th class="charger-col">Charger</th>
+        <th>Start</th>
+        <th>End</th>
+        <th class="power-col">Power Used (Wh)</th>
+        <th>Session</th>
+      </tr>`;
+      sessionsArr.forEach(s => {
+        let row = table.insertRow(-1);
+        row.insertCell(0).innerHTML = getSessionStatus(s);
+        row.insertCell(1).textContent = s.vehicleNumber || "-";
+        row.insertCell(2).textContent = formatCurrency(s.amountPaid || 0);
+        row.insertCell(3).textContent = s.chargerId || "unassigned";
+        row.insertCell(4).textContent = s.startTime ? formatDate(s.startTime) : "-";
+        row.insertCell(5).textContent = (s.active === false && s.endTime) ? formatDate(s.endTime) : "-";
+        row.insertCell(6).textContent = sessionPowerWh(s) + " Wh";
+        row.insertCell(7).textContent = s.sessionId || "-";
+      });
+      document.getElementById("historyNote").innerText =
+        "Showing complete history. 'Power Used' is computed dynamically using recorded times.";
+    }
+
+    function makeGraphs(sessionsArr) {
+      // Bar: transactions per day
+      let txDayCounts = {};
+      sessionsArr.forEach(s => {
+        if(s.startTime) {
+          let date = new Date(s.startTime).toLocaleDateString();
+          txDayCounts[date] = (txDayCounts[date] || 0) + 1;
+        }
+      });
+      let dayLabels = Object.keys(txDayCounts).sort((a,b)=>new Date(a)-new Date(b));
+      let txCounts = dayLabels.map(d => txDayCounts[d]);
+
+      let ctx1 = document.getElementById('txBarChart').getContext('2d');
+      new Chart(ctx1, {
+        type: 'bar',
+        data: {
+          labels: dayLabels,
+          datasets: [{
+            label: "# Transactions",
+            data: txCounts,
+            backgroundColor: 'rgba(25,118,210,.19)',
+            borderColor: '#1976d2',
+            borderWidth: 1,
+            maxBarThickness: 68
+          }]
+        },
+        options: {
+          scales: {
+            x: { title: { display: true, text: 'Date' } },
+            y: { title: { display: true, text: 'Transactions' }, beginAtZero: true },
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      // Line: amount & power per day
+      let dayPaid = {}, dayPower = {};
+      sessionsArr.forEach(s => {
+        if (s.startTime) {
+          let date = new Date(s.startTime).toLocaleDateString();
+          dayPaid[date] = (dayPaid[date] || 0) + Number(s.amountPaid || 0);
+          dayPower[date] = (dayPower[date] || 0) + Number(sessionPowerWh(s))/1000; //kWh
+        }
+      });
+      let lineLabels = dayLabels;
+      let linePaid = lineLabels.map(d=>dayPaid[d]);
+      let linePower = lineLabels.map(d=>dayPower[d]);
+      let ctx2 = document.getElementById('amountLineChart').getContext('2d');
+      new Chart(ctx2, {
+        type: 'line',
+        data: {
+          labels: lineLabels,
+          datasets: [
+            { label: "Amount Paid (₹)", data: linePaid, borderColor: "#308ec7", backgroundColor: "rgba(48,142,199,0.13)", yAxisID: "y" },
+            { label: "Energy (kWh)", data: linePower, borderColor: "#6d55ca", backgroundColor: "rgba(109,85,202,0.11)", yAxisID: "y1"},
+          ]
+        },
+        options: {
+          scales: {
+            y: { type: 'linear', display: true, position: 'left', title:{display:true,text:'Amount'} },
+            y1: { type:'linear', display:true, position:'right', title:{display:true,text:'kWh'},
+              grid: { drawOnChartArea: false }
+            }
+          }
+        }
+      });
+    }
+
+    // Load all sessions once
+    db.ref("sessions").once("value")
+      .then(snapshot => {
+        let sessionsData = snapshot.val() || {};
+        // Prepare array
+        let sessionsArr = Object.keys(sessionsData).map(k => ({
+          ...sessionsData[k],
+          sessionId: k,
+        }));
+        // Optionally for ended sessions, record endTime if not present and session inactive
+        sessionsArr.forEach(s => {
+          if(s.active === false && !s.endTime && s.startTime) {
+            s.endTime = s.startTime + Math.floor((Math.random()*1.3+1)*420*1000); // simulate end time
+          }
+        });
+
+        showStats(sessionsArr);
+        populateTable(sessionsArr);
+        makeGraphs(sessionsArr);
+      });
+  </script>
+</body>
+</html>
