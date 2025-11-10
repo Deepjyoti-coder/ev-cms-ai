@@ -188,6 +188,7 @@
     let chargers = {};
     let lastSyncTimer = null;
 
+    // Utility functions
     function formatCurrency(r) { return "₹" + Number(r).toFixed(2); }
     function formatElapsed(ms) {
       let sec = Math.floor(ms/1000);
@@ -201,7 +202,35 @@
       out.push(s+"s");
       return out.join(' ');
     }
-    function renderSessions() {
+
+    function getChargersOnlineCount() {
+      // Chargers that are not occupied (free)
+      return Object.values(chargers).filter(ch => ch && ch.occupied === false).length;
+    }
+
+    function getActiveSessionsCount() {
+      return Object.values(sessions).filter(s => s && s.active).length;
+    }
+
+    function getTotalPower() {
+      let totalPower = 0;
+      let now = Date.now();
+      Object.values(sessions).forEach(session => {
+        if (session.active && session.startTime) {
+          const seconds = Math.floor((now - session.startTime) / 1000);
+          totalPower += seconds * 0.01;
+        }
+      });
+      return totalPower;
+    }
+
+    function renderStats() {
+      document.getElementById("chargerOnline").innerText = getChargersOnlineCount();
+      document.getElementById("activeCount").innerText = getActiveSessionsCount();
+      document.getElementById("totalPower").innerText = getTotalPower().toFixed(2);
+    }
+
+    function renderSessionsTable() {
       const table = document.getElementById("chargingList");
       table.innerHTML = `<tr>
         <th>Vehicle</th>
@@ -210,12 +239,9 @@
         <th>Elapsed</th>
         <th class="actions-col">Actions</th>
       </tr>`;
-      let activeCount = 0;
       let now = Date.now();
-      for(let sid in sessions) {
-        const session = sessions[sid];
+      Object.entries(sessions).forEach(([sid, session]) => {
         if (session.active) {
-          activeCount++;
           const row = table.insertRow(-1);
           row.insertCell(0).innerText = session.vehicleNumber;
           row.insertCell(1).innerText = formatCurrency(session.amountPaid);
@@ -229,30 +255,16 @@
           endBtn.onclick = function() { endSession(sid, session.chargerId); };
           cell.appendChild(endBtn);
         }
-      }
-      document.getElementById("activeCount").innerText = activeCount;
+      });
     }
-    function updatePower() {
-      let totalPower = 0;
-      let now = Date.now();
-      for (let id in sessions) {
-        const session = sessions[id];
-        if (session.active && session.startTime) {
-          const seconds = Math.floor((now - session.startTime) / 1000);
-          totalPower += seconds * 0.01;
-        }
-      }
-      document.getElementById("totalPower").innerText = totalPower.toFixed(2);
+
+    function renderAll() {
+      renderStats();
+      renderSessionsTable();
     }
-    function updateChargersOnline() {
-      // Count chargers with occupied === false
-      let onlineCount = 0;
-      for(let id in chargers) {
-        if(chargers[id].occupied === false) onlineCount++;
-      }
-      document.getElementById("chargerOnline").innerText = onlineCount;
-    }
+
     function endSession(sessionId, chargerId) {
+      // End session
       firebase.database().ref("sessions/" + sessionId + "/active").set(false, function(error) {
         if (!error) {
           document.getElementById("endSuccessMsg").innerText = "Session ended!";
@@ -261,28 +273,32 @@
           document.getElementById("endSuccessMsg").innerText = "Error ending session!";
         }
       });
+      // Mark charger as unoccupied
       if(chargerId && chargerId !== "unassigned") {
         firebase.database().ref("chargers/" + chargerId + "/occupied").set(false);
       }
     }
 
-    // Listen for sessions and chargers updates
+    // Real-time listeners
+    db.ref("chargers").on("value", snap => {
+      chargers = snap.val() || {};
+      renderAll();
+    });
     db.ref("sessions").on("value", snapshot => {
       sessions = snapshot.val() || {};
-      renderSessions();
+      renderAll();
       if (lastSyncTimer) clearTimeout(lastSyncTimer);
       document.getElementById("lastSync").innerText = "Last data sync: " + new Date().toLocaleTimeString();
       lastSyncTimer = setTimeout(() => {
         document.getElementById("lastSync").innerText = "";
       }, 12000);
     });
-    db.ref("chargers").on("value", snap => {
-      chargers = snap.val() || {};
-      updateChargersOnline();
-      renderSessions();
-    });
 
-    setInterval(updatePower, 1000); // live power update
+    // Live power update for stat box only
+    setInterval(() => {
+      document.getElementById("totalPower").innerText = getTotalPower().toFixed(2);
+    }, 1000);
+
   </script>
 </body>
 </html>
