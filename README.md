@@ -148,3 +148,6 @@ Preparing AI Prompt – 11
 
 "Step 6:
 Give a short summary explaining how this project is similar to a real EV-Charger Monitoring System used in the industry."
+
+
+Live Link: https://deepjyoti-coder.github.io/ev-cms-ai/
