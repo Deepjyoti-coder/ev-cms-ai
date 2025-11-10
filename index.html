@@ -23,8 +23,9 @@
       justify-content: flex-end;
       align-items: center;
       margin-bottom: 16px;
+      gap: 10px;
     }
-    .submit-btn {
+    .submit-btn, .history-btn {
       background: #1976d2;
       color: #fff;
       border: none;
@@ -35,7 +36,7 @@
       font-size: 16px;
       transition: background .15s;
     }
-    .submit-btn:hover {
+    .submit-btn:hover, .history-btn:hover {
       background: #1656a2;
     }
     h1 {
@@ -137,6 +138,7 @@
 <body>
   <div class="container">
     <div class="top-bar">
+      <button class="history-btn" onclick="window.location.href='history.html'">View Analytics</button>
       <button class="submit-btn" onclick="window.location.href='submit.html'">Open Submit Page</button>
     </div>
     <h1>EV Charger Monitoring — Live Dashboard</h1>
