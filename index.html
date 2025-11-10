@@ -171,7 +171,6 @@
     </div>
   </div>
   <script>
-    // Firebase config from your details
     const firebaseConfig = {
       apiKey: "AIzaSyDwL6DkusiZ4dw6n2zCkn5fkUKA8jePDxU",
       authDomain: "ev-charger-demo-af910.firebaseapp.com",
@@ -187,6 +186,8 @@
 
     let sessions = {};
     let chargers = {};
+    let lastSyncTimer = null;
+
     function formatCurrency(r) { return "₹" + Number(r).toFixed(2); }
     function formatElapsed(ms) {
       let sec = Math.floor(ms/1000);
@@ -210,9 +211,7 @@
         <th class="actions-col">Actions</th>
       </tr>`;
       let activeCount = 0;
-      let onlineCount = 0;
       let now = Date.now();
-      for(let id in chargers) if(chargers[id].occupied!==true) onlineCount++;
       for(let sid in sessions) {
         const session = sessions[sid];
         if (session.active) {
@@ -232,7 +231,6 @@
         }
       }
       document.getElementById("activeCount").innerText = activeCount;
-      document.getElementById("chargerOnline").innerText = Object.keys(chargers).length;
     }
     function updatePower() {
       let totalPower = 0;
@@ -246,6 +244,14 @@
       }
       document.getElementById("totalPower").innerText = totalPower.toFixed(2);
     }
+    function updateChargersOnline() {
+      // Count chargers with occupied === false
+      let onlineCount = 0;
+      for(let id in chargers) {
+        if(chargers[id].occupied === false) onlineCount++;
+      }
+      document.getElementById("chargerOnline").innerText = onlineCount;
+    }
     function endSession(sessionId, chargerId) {
       firebase.database().ref("sessions/" + sessionId + "/active").set(false, function(error) {
         if (!error) {
@@ -255,18 +261,28 @@
           document.getElementById("endSuccessMsg").innerText = "Error ending session!";
         }
       });
-      if(chargerId) firebase.database().ref("chargers/" + chargerId + "/occupied").set(false);
+      if(chargerId && chargerId !== "unassigned") {
+        firebase.database().ref("chargers/" + chargerId + "/occupied").set(false);
+      }
     }
+
+    // Listen for sessions and chargers updates
     db.ref("sessions").on("value", snapshot => {
       sessions = snapshot.val() || {};
       renderSessions();
+      if (lastSyncTimer) clearTimeout(lastSyncTimer);
       document.getElementById("lastSync").innerText = "Last data sync: " + new Date().toLocaleTimeString();
+      lastSyncTimer = setTimeout(() => {
+        document.getElementById("lastSync").innerText = "";
+      }, 12000);
     });
     db.ref("chargers").on("value", snap => {
       chargers = snap.val() || {};
+      updateChargersOnline();
       renderSessions();
     });
-    setInterval(updatePower, 1000);
+
+    setInterval(updatePower, 1000); // live power update
   </script>
 </body>
 </html>
