@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>EV-Charger Monitoring Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Firebase SDK v9 compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database-compat.js"></script>
+</head>
+<body>
+  <h1>EV-Charger Monitoring Dashboard</h1>
+  <div class="stats">
+    <span>Chargers Online: <span id="activeCount">0</span></span>
+    <span>Total Power Used: <span id="totalPower">0.00</span> Watts</span>
+  </div>
+  <h2>Currently Charging:</h2>
+  <table id="chargingList">
+    <tr>
+      <th>Vehicle Number</th>
+      <th>Amount Paid</th>
+      <th>Charging Start Time</th>
+      <th>Charger</th>
+    </tr>
+    <!-- Data rows inserted here -->
+  </table>
+  <script>
+    // Firebase config from your details
+    const firebaseConfig = {
+      apiKey: "AIzaSyDwL6DkusiZ4dw6n2zCkn5fkUKA8jePDxU",
+      authDomain: "ev-charger-demo-af910.firebaseapp.com",
+      databaseURL: "https://ev-charger-demo-af910-default-rtdb.firebaseio.com",
+      projectId: "ev-charger-demo-af910",
+      storageBucket: "ev-charger-demo-af910.firebasestorage.app",
+      messagingSenderId: "407797049243",
+      appId: "1:407797049243:web:3cccc1c34bfc67ddd4a33e",
+      measurementId: "G-M3BGNZVTZN"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let sessions = {};
+
+    // Render session table
+    function renderSessions() {
+      const table = document.getElementById("chargingList");
+      table.innerHTML = `<tr>
+        <th>Vehicle Number</th>
+        <th>Amount Paid</th>
+        <th>Charging Start Time</th>
+        <th>Charger</th>
+      </tr>`;
+      let activeCount = 0;
+      for (let id in sessions) {
+        const session = sessions[id];
+        if (session.active) {
+          activeCount++;
+          const row = table.insertRow(-1);
+          row.insertCell(0).innerText = session.vehicleNumber;
+          row.insertCell(1).innerText = "₹ " + session.amountPaid;
+          row.insertCell(2).innerText = new Date(session.startTime).toLocaleTimeString();
+          row.insertCell(3).innerText = session.chargerId ? session.chargerId : '';
+        }
+      }
+      document.getElementById("activeCount").innerText = activeCount;
+    }
+
+    // Calculate and update power usage
+    function updatePower() {
+      let totalPower = 0;
+      const now = Date.now();
+      for (let id in sessions) {
+        const session = sessions[id];
+        if (session.active && session.startTime) {
+          const seconds = Math.floor((now - session.startTime)/1000);
+          totalPower += seconds * 0.01;
+        }
+      }
+      document.getElementById("totalPower").innerText = totalPower.toFixed(2);
+    }
+
+    // Listen for live session updates
+    db.ref("sessions").on("value", snapshot => {
+      sessions = snapshot.val() || {};
+      renderSessions();
+    });
+
+    setInterval(updatePower, 1000); // live power update
+  </script>
+</body>
+</html>
